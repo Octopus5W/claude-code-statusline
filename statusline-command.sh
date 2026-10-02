@@ -2,7 +2,7 @@
 # Claude Code status line, two rows, truecolor
 #
 #  Row 1  ▌ repo  ⎇ branch  ·  +added −removed vs main  ·  $cost
-#  Row 2  ctx ███░░░ 12%  │  session 53k ↑45k ↓8k  │  today 1.2M  │  5h ██░░ 8%  7d █░░░ 2%
+#  Row 2  ctx ███░░┃░ 12%  │  session 53k ↑45k ↓8k  │  today 1.2M  │  5h ██░░ 8%  7d █░░░ 2%
 
 input=$(cat)
 
@@ -25,6 +25,7 @@ C_TODAY=$(fg 183 148 244)
 C_OK=$(fg 72 207 130)
 C_WARN=$(fg 246 173 85)
 C_BAD=$(fg 245 101 101)
+C_MARK=$(fg 246 173 85)    # auto-compact tick
 
 SEP=" ${C_SEP}│${RST} "
 DOT=" ${C_SEP}·${RST} "
@@ -52,16 +53,18 @@ level_color() {
   fi
 }
 
-# bar <pct> <width>: solid blocks in level color over a dim track
+# bar <pct> <width> [marker-cell]: solid blocks in level color over a dim track,
+# with an optional tick drawn after <marker-cell> cells
 bar() {
-  local pct=$1 width=$2 filled i out=""
+  local pct=$1 width=$2 mark=${3:-0} filled i out=""
   [ "$pct" -gt 100 ] && pct=100
   filled=$(( (pct * width + 50) / 100 ))
   [ "$pct" -gt 0 ] && [ "$filled" -eq 0 ] && filled=1
   out="$(level_color "$pct")"
-  for ((i = 0; i < filled; i++)); do out+="█"; done
-  out+="$C_TRACK"
-  for ((i = filled; i < width; i++)); do out+="░"; done
+  for ((i = 0; i < width; i++)); do
+    [ "$mark" -gt 0 ] && [ "$i" -eq "$mark" ] && out+="${C_MARK}┃"
+    if [ "$i" -lt "$filled" ]; then out+="$(level_color "$pct")█"; else out+="${C_TRACK}░"; fi
+  done
   printf '%s%s' "$out" "$RST"
 }
 
@@ -137,7 +140,10 @@ printf '%s%s%s%s' "$DOT" "$C_COST" "$cost" "$RST"
 printf '\n'
 
 # ── Row 2: usage ─────────────────────────────────────────────────────────────
-printf '%sctx%s %s %s%s%d%%%s' "$C_LABEL" "$RST" "$(bar "$ctx_pct" 10)" "$BOLD" "$(level_color "$ctx_pct")" "$ctx_pct" "$RST"
+# Tick where auto-compact triggers (~80% by default, approximate)
+compact_at=${CLAUDE_AUTOCOMPACT_PCT_OVERRIDE:-80}
+case "$compact_at" in ''|*[!0-9]*|0) compact_at=80 ;; esac
+printf '%sctx%s %s %s%s%d%%%s' "$C_LABEL" "$RST" "$(bar "$ctx_pct" 10 $(( compact_at * 10 / 100 )))" "$BOLD" "$(level_color "$ctx_pct")" "$ctx_pct" "$RST"
 printf '%s%ssession%s %s%s%s %s↑%s ↓%s%s' "$SEP" "$C_LABEL" "$RST" "${BOLD}${C_TEXT}" "$(fmt_tokens "$((total_input + total_output))")" "$RST" \
   "$C_LABEL" "$(fmt_tokens "$total_input")" "$(fmt_tokens "$total_output")" "$RST"
 printf '%s%stoday%s %s%s%s' "$SEP" "$C_LABEL" "$RST" "${BOLD}${C_TODAY}" "$(fmt_tokens "$all_tokens")" "$RST"
