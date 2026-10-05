@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Claude Code status line, two rows, truecolor
 #
-#  Row 1  ▌ repo  ⎇ branch  ·  ◆ model  ·  +added −removed vs main  ·  $cost
+#  Row 1  ▌ repo  ⎇ branch  ·  ◆ model ◔ effort  ·  +added −removed vs main  ·  $cost
 #  Row 2  ctx ███░░┃░ 12%  │  session 53k ↑45k ↓8k  │  today 1.2M  │  5h ██░░ 8%  7d █░░░ 2%
 
 input=$(cat)
@@ -40,6 +40,8 @@ eval "$(echo "$input" | jq -r '
   @sh "cwd=\(.workspace.current_dir // .cwd // ".")",
   @sh "model_id=\(.model.id // "")",
   @sh "model_name=\(.model.display_name // .model.id // "")",
+  @sh "effort=\(.effort.level // "")",
+  @sh "thinking=\(.thinking.enabled // false)",
   @sh "ctx_raw=\(.context_window.used_percentage // 0)",
   @sh "total_input=\(.context_window.total_input_tokens // 0)",
   @sh "total_output=\(.context_window.total_output_tokens // 0)",
@@ -151,6 +153,12 @@ cost=$(awk -v c="$cost_raw" 'BEGIN { printf (c < 1 ? "$%.3f" : "$%.2f"), c }')
 printf '%s▌%s %s%s%s' "$C_ACCENT" "$RST" "${BOLD}${C_ACCENT}" "$repo_name" "$RST"
 [ -n "$branch" ] && printf '  %s⎇%s %s%s%s' "$C_LABEL" "$RST" "$C_BRANCH" "$branch" "$RST"
 [ -n "$model_name" ] && printf '%s%s◆%s %s%s%s' "$DOT" "$C_MODEL" "$RST" "${BOLD}${C_MODEL}" "$model_name" "$RST"
+# Thinking level: effort when the model supports it, otherwise just on/off
+if [ -n "$effort" ]; then
+  printf ' %s◔%s %s%s%s' "$C_LABEL" "$RST" "$C_TEXT" "$effort" "$RST"
+elif [ "$thinking" = "true" ]; then
+  printf ' %s◔%s %sthinking%s' "$C_LABEL" "$RST" "$C_TEXT" "$RST"
+fi
 printf '%s%s+%d%s %s−%d%s' "$DOT" "$C_ADD" "$added" "$RST" "$C_DEL" "$deleted" "$RST"
 printf '%s%s%s%s' "$DOT" "$C_COST" "$cost" "$RST"
 printf '\n'
