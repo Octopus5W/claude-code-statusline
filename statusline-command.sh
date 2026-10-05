@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Claude Code status line, two rows, truecolor
 #
-#  Row 1  ▌ repo  ⎇ branch  ·  +added −removed vs main  ·  $cost
+#  Row 1  ▌ repo  ⎇ branch  ·  ◆ model  ·  +added −removed vs main  ·  $cost
 #  Row 2  ctx ███░░┃░ 12%  │  session 53k ↑45k ↓8k  │  today 1.2M  │  5h ██░░ 8%  7d █░░░ 2%
 
 input=$(cat)
@@ -26,6 +26,10 @@ C_OK=$(fg 72 207 130)
 C_WARN=$(fg 246 173 85)
 C_BAD=$(fg 245 101 101)
 C_MARK=$(fg 246 173 85)    # auto-compact tick
+C_OPUS=$(fg 237 137 54)    # model family accents
+C_SONNET=$(fg 79 209 197)
+C_HAIKU=$(fg 154 230 180)
+C_FABLE=$(fg 237 100 166)
 
 SEP=" ${C_SEP}│${RST} "
 DOT=" ${C_SEP}·${RST} "
@@ -34,6 +38,8 @@ DOT=" ${C_SEP}·${RST} "
 eval "$(echo "$input" | jq -r '
   @sh "repo_name=\(.workspace.repo.name // (.workspace.project_dir // "" | split("/") | last) // "claude")",
   @sh "cwd=\(.workspace.current_dir // .cwd // ".")",
+  @sh "model_id=\(.model.id // "")",
+  @sh "model_name=\(.model.display_name // .model.id // "")",
   @sh "ctx_raw=\(.context_window.used_percentage // 0)",
   @sh "total_input=\(.context_window.total_input_tokens // 0)",
   @sh "total_output=\(.context_window.total_output_tokens // 0)",
@@ -43,6 +49,15 @@ eval "$(echo "$input" | jq -r '
 ')"
 [ -z "$repo_name" ] && repo_name="claude"
 ctx_pct=$(printf "%.0f" "$ctx_raw")
+
+# Model accent by family, falling back to plain text
+case "$(printf '%s %s' "$model_id" "$model_name" | tr '[:upper:]' '[:lower:]')" in
+  *opus*)   C_MODEL=$C_OPUS ;;
+  *sonnet*) C_MODEL=$C_SONNET ;;
+  *haiku*)  C_MODEL=$C_HAIKU ;;
+  *fable*)  C_MODEL=$C_FABLE ;;
+  *)        C_MODEL=$C_TEXT ;;
+esac
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 # Level color: green < 60, amber < 85, red otherwise
@@ -135,6 +150,7 @@ cost=$(awk -v c="$cost_raw" 'BEGIN { printf (c < 1 ? "$%.3f" : "$%.2f"), c }')
 # ── Row 1: identity ──────────────────────────────────────────────────────────
 printf '%s▌%s %s%s%s' "$C_ACCENT" "$RST" "${BOLD}${C_ACCENT}" "$repo_name" "$RST"
 [ -n "$branch" ] && printf '  %s⎇%s %s%s%s' "$C_LABEL" "$RST" "$C_BRANCH" "$branch" "$RST"
+[ -n "$model_name" ] && printf '%s%s◆%s %s%s%s' "$DOT" "$C_MODEL" "$RST" "${BOLD}${C_MODEL}" "$model_name" "$RST"
 printf '%s%s+%d%s %s−%d%s' "$DOT" "$C_ADD" "$added" "$RST" "$C_DEL" "$deleted" "$RST"
 printf '%s%s%s%s' "$DOT" "$C_COST" "$cost" "$RST"
 printf '\n'
